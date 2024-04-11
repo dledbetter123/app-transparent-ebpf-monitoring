@@ -14,8 +14,9 @@ void JNICALL MethodEntryCallback(jvmtiEnv *jvmti_env, JNIEnv* jni_env, jthread t
     }
 
     // when signature is NULL it causes segmentation faults in the JVM
-    if (signature != NULL && signature[1] == 'L' && strncmp(signature + 2, "java/lang/String;", 17) == 0) {
+    if (signature != NULL && strstr(name, "print") != NULL) {
         jobject arg1;
+        printf("Method with 'print' in its name: %s\n", name);
 
         // get the first local object, safeguarded by checks
         err = (*jvmti_env)->GetLocalObject(jvmti_env, thread, 0, 1, &arg1);
@@ -27,6 +28,8 @@ void JNICALL MethodEntryCallback(jvmtiEnv *jvmti_env, JNIEnv* jni_env, jthread t
             }
             // Release local reference to avoid memory leak
             (*jni_env)->DeleteLocalRef(jni_env, arg1);
+        } else {
+            print(arg1);
         }
     }
 
