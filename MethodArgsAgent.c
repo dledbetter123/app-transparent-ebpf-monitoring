@@ -9,30 +9,28 @@ void JNICALL MethodEntryCallback(jvmtiEnv *jvmti_env, JNIEnv* jni_env, jthread t
 
     err = (*jvmti_env)->GetMethodName(jvmti_env, method, &name, &signature, NULL);
     if (err != JVMTI_ERROR_NONE) {
-
+        printf("ERROR: Unable to retrieve method name and signature\n");
         return;
     }
 
-    // when signature is NULL it causes segmentation faults in the JVM
-    if (signature != NULL && strstr(name, "print") != NULL) {
+    if (strcmp(name, "printInput") == 0 && strcmp(signature, "(Ljava/lang/String;)V") == 0) {
         jobject arg1;
-        printf("Method with 'print' in its name: %s\n", name);
 
-        // get the first local object, safeguarded by checks
         err = (*jvmti_env)->GetLocalObject(jvmti_env, thread, 0, 0, &arg1);
         if (err == JVMTI_ERROR_NONE && arg1 != NULL) {
             const char *strArg = (*jni_env)->GetStringUTFChars(jni_env, (jstring)arg1, NULL);
             if (strArg != NULL) {
-                printf("Method %s called with String argument: %s\n", name, strArg);
+                printf("printInput called with String argument: %s\n", strArg);
                 (*jni_env)->ReleaseStringUTFChars(jni_env, (jstring)arg1, strArg);
+            } else {
+                printf("ERROR: GetStringUTFChars returned NULL\n");
             }
-            // Release local reference to avoid memory leak
             (*jni_env)->DeleteLocalRef(jni_env, arg1);
         } else {
-            // printf("Argument not detected, arg1 mem addr = %p\n", arg1);
-            // printf("Argument not detected, err = %d, JVMTI_ERROR_NONE = %d\n", err, JVMTI_ERROR_NONE);
+            printf("ERROR: Unable to get local object for method argument, error code: %d\n", err);
         }
     }
+
 
     if (name != NULL) {
         (*jvmti_env)->Deallocate(jvmti_env, (unsigned char*)name);
@@ -41,6 +39,7 @@ void JNICALL MethodEntryCallback(jvmtiEnv *jvmti_env, JNIEnv* jni_env, jthread t
         (*jvmti_env)->Deallocate(jvmti_env, (unsigned char*)signature);
     }
 }
+
 
 JNIEXPORT jint JNICALL Agent_OnLoad(JavaVM *jvm, char *options, void *reserved) {
     jvmtiEnv *jvmti;
@@ -56,6 +55,12 @@ JNIEXPORT jint JNICALL Agent_OnLoad(JavaVM *jvm, char *options, void *reserved) 
 
     memset(&capabilities, 0, sizeof(capabilities));
     capabilities.can_generate_method_entry_events = 1;
+    capabilities.can_access_local_variables = 1;
+    jvmtiError capErr = (*jvmti)->AddCapabilities(jvmti, &capabilities);
+    if (capErr != JVMTI_ERROR_NONE) {
+        printf("ERROR: Unable to add capabilities for accessing local variables, error code: %d\n", capErr);
+        return JNI_ERR;
+    }
     (*jvmti)->AddCapabilities(jvmti, &capabilities);
 
     memset(&callbacks, 0, sizeof(callbacks));
