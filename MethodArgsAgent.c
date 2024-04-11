@@ -5,30 +5,50 @@
 void JNICALL MethodEntryCallback(jvmtiEnv *jvmti_env, JNIEnv* jni_env, jthread thread, jmethodID method) {
     char *name;
     char *signature;
+    jvmtiError err;
 
+    err = (*jvmti_env)->GetMethodName(jvmti_env, method, &name, &signature, NULL);
+    if (err != JVMTI_ERROR_NONE) {
 
-    (*jvmti_env)->GetMethodName(jvmti_env, method, &name, &signature, NULL);
-
-    if (signature[1] == 'L' && strncmp(signature + 2, "java/lang/String;", 17) == 0) {
-
-        jobject arg1;
-        (*jvmti_env)->GetLocalObject(jvmti_env, thread, 0, 1, &arg1); // First argument
-
-        const char *strArg = (*jni_env)->GetStringUTFChars(jni_env, (jstring)arg1, NULL);
-        printf("Method %s called with String argument: %s\n", name, strArg);
-        (*jni_env)->ReleaseStringUTFChars(jni_env, (jstring)arg1, strArg);
+        return;
     }
 
-    (*jvmti_env)->Deallocate(jvmti_env, (unsigned char*)name);
-    (*jvmti_env)->Deallocate(jvmti_env, (unsigned char*)signature);
+    // when signature is NULL it causes segmentation faults in the JVM
+    if (signature != NULL && signature[1] == 'L' && strncmp(signature + 2, "java/lang/String;", 17) == 0) {
+        jobject arg1;
+
+        // get the first local object, safeguarded by checks
+        err = (*jvmti_env)->GetLocalObject(jvmti_env, thread, 0, 1, &arg1);
+        if (err == JVMTI_ERROR_NONE && arg1 != NULL) {
+            const char *strArg = (*jni_env)->GetStringUTFChars(jni_env, (jstring)arg1, NULL);
+            if (strArg != NULL) {
+                printf("Method %s called with String argument: %s\n", name, strArg);
+                (*jni_env)->ReleaseStringUTFChars(jni_env, (jstring)arg1, strArg);
+            }
+            // Release local reference to avoid memory leak
+            (*jni_env)->DeleteLocalRef(jni_env, arg1);
+        }
+    }
+
+    if (name != NULL) {
+        (*jvmti_env)->Deallocate(jvmti_env, (unsigned char*)name);
+    }
+    if (signature != NULL) {
+        (*jvmti_env)->Deallocate(jvmti_env, (unsigned char*)signature);
+    }
 }
 
 JNIEXPORT jint JNICALL Agent_OnLoad(JavaVM *jvm, char *options, void *reserved) {
     jvmtiEnv *jvmti;
     jvmtiCapabilities capabilities;
     jvmtiEventCallbacks callbacks;
+    jvmtiError err;
 
-    (*jvm)->GetEnv(jvm, (void **)&jvmti, JVMTI_VERSION_1_0);
+    jint res = (*jvm)->GetEnv(jvm, (void **)&jvmti, JVMTI_VERSION_1_0);
+    if (res != JNI_OK || jvmti == NULL) {
+        // JNI_OK (0) indicates success; anything else is an error
+        return JNI_ERR;
+    }
 
     memset(&capabilities, 0, sizeof(capabilities));
     capabilities.can_generate_method_entry_events = 1;
