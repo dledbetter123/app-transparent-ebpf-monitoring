@@ -19,7 +19,7 @@ void JNICALL MethodEntryCallback(jvmtiEnv *jvmti_env, JNIEnv* jni_env, jthread t
         printf("Method with 'print' in its name: %s\n", name);
 
         // get the first local object, safeguarded by checks
-        err = (*jvmti_env)->GetLocalObject(jvmti_env, thread, 0, 1, &arg1);
+        err = (*jvmti_env)->GetLocalObject(jvmti_env, thread, 0, 0, &arg1);
         if (err == JVMTI_ERROR_NONE && arg1 != NULL) {
             const char *strArg = (*jni_env)->GetStringUTFChars(jni_env, (jstring)arg1, NULL);
             if (strArg != NULL) {
@@ -29,7 +29,8 @@ void JNICALL MethodEntryCallback(jvmtiEnv *jvmti_env, JNIEnv* jni_env, jthread t
             // Release local reference to avoid memory leak
             (*jni_env)->DeleteLocalRef(jni_env, arg1);
         } else {
-            print(arg1);
+            // printf("Argument not detected, arg1 mem addr = %p\n", arg1);
+            // printf("Argument not detected, err = %d, JVMTI_ERROR_NONE = %d\n", err, JVMTI_ERROR_NONE);
         }
     }
 
